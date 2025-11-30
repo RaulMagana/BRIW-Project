@@ -177,16 +177,14 @@ class SolrDeepCrawler
                 $titulo = 'Sin titulo';
             }
             
-            // Extracción de contenido usando HTML para el preprocesador
+            // Extracción de contenido
             $contenidoHtml = '';
-            // Priorizamos párrafos del contenido principal
             $selectorTexto = $crawler->filter('#bodyContent p')->count() > 0 ? '#bodyContent p' : 'body p';
             
             $crawler->filter($selectorTexto)->each(function (Crawler $node) use (&$contenidoHtml) {
                 $contenidoHtml .= $node->html() . ' ';
             });
 
-            // Si falla, fallback
             if (strlen($contenidoHtml) < 50) {
                 $contenidoHtml = $crawler->filter('body')->html();
             }
@@ -195,7 +193,6 @@ class SolrDeepCrawler
             $tokens = Preprocessor::process($contenidoHtml);
             $contenidoLimpio = implode(' ', $tokens);
 
-            // Filtro de calidad: Si la página tiene muy poco texto útil, no indexar
             if (strlen($contenidoLimpio) < 100) {
                 echo "    -> [SKIP] Contenido insuficiente ($titulo)\n";
                 return;
@@ -203,11 +200,16 @@ class SolrDeepCrawler
 
             $contenidoSeguro = mb_substr($contenidoLimpio, 0, 30000, "UTF-8");
 
+            // --- AQUÍ ESTÁ LA CORRECCIÓN DE CAMPOS PARA SOLR ---
             $doc->id = md5($url);
-            $doc->titulo = $titulo;
-            $doc->contenido = $contenidoSeguro;
-            $doc->url = $url;
-            $doc->categoria = (strpos($contenidoSeguro, 'tecnologia') !== false) ? 'Tecnología' : 'General';
+            
+            // Nombre definido en setup_solr.php -> Variable de tu crawler
+            $doc->titulo_texto = $titulo;          // Antes tenías $doc->titulo
+            $doc->desc_texto   = $contenidoSeguro; // Antes tenías $doc->contenido
+            $doc->url_str      = $url;             // Antes tenías $doc->url
+            
+            // Omitimos categoria porque no lo definimos en el schema inicial
+            // $doc->categoria = ... 
 
             $update->addDocument($doc);
             $update->addCommit();
