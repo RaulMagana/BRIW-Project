@@ -22,7 +22,7 @@ foreach ($campos as $campo) {
         ]);
         echo "Campo '{$campo['name']}' creado/verificado.\n";
     } catch (\Exception $e) {
-        // Ignoramos si ya existe
+        
     }
 }
 echo "\n¡Esquema configurado correctamente!\n";
