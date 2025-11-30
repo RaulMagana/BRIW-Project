@@ -2,39 +2,43 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Buscador Inteligente</title>
     <link rel="stylesheet" href="styles.css">
-    <style>
-        body { font-family: Arial, sans-serif; padding: 20px; display: flex; flex-direction: column; }
-        .top-bar { margin-bottom: 20px; }
-        .main-layout { display: flex; }
-        aside { width: 250px; background: #f9f9f9; padding: 15px; border-right: 1px solid #ddd; margin-right: 20px; }
-        section { flex: 1; }
-        input[type="text"] { padding: 10px; width: 300px; font-size: 16px; }
-        button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
-        
-        /* Estilo extra para resaltar sugerencias en el dropdown si el navegador lo permite */
-        datalist { max-height: 200px; overflow-y: auto; }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="top-bar">
-        <h1>Buscador Inteligente</h1>
-        
-        <input type="text" id="query" placeholder="Buscar..." list="suggestions" autocomplete="off">
-        <datalist id="suggestions"></datalist>
-        
-        <button id="btn-search">Buscar</button>
-    </div>
+    
+    <header class="top-bar">
+        <div class="container search-wrapper">
+            <div class="logo-area">
+                <h1>🔍 Buscador</h1>
+            </div>
+            
+            <div class="input-group">
+                <input type="text" id="query" placeholder="¿Qué deseas encontrar hoy?" list="suggestions" autocomplete="off">
+                <datalist id="suggestions"></datalist>
+                <button id="btn-search">Buscar</button>
+            </div>
+        </div>
+    </header>
 
-    <div id="correction-area"></div>
+    <div class="container">
+        <div id="correction-area"></div>
 
-    <div class="main-layout">
-        <aside id="facets-area">
-            <h3>Filtros</h3>
-        </aside>
-        <section id="results-area">
-        </section>
+        <div class="main-layout">
+            <aside id="facets-area">
+                <div class="card">
+                    <h3>Filtrar por</h3>
+                    <div id="facets-content">
+                        </div>
+                </div>
+            </aside>
+
+            <section id="results-area">
+                <div class="placeholder-msg">Realiza una búsqueda para comenzar.</div>
+            </section>
+        </div>
     </div>
     
     <script src="app.js"></script>

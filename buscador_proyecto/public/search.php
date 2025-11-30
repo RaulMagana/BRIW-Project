@@ -29,7 +29,7 @@ $queryTerm = $_GET['q'] ?? '*:*';
 // Crear consulta
 $query = $client->createSelect();
 
-// Configuración del parser eDisMax (Fundamental para que funcione la sintaxis booleana nativa)
+// Configuración del parser eDisMax  para que funcione la sintaxis booleana nativa
 $dismax = $query->getEDisMax();
 
 // Aquí definimos dónde buscar. 
