@@ -16,15 +16,18 @@ use Symfony\Component\DomCrawler\Crawler;
 
 final class CrawlerSelectorTextSame extends Constraint
 {
-    public function __construct(
-        private string $selector,
-        private string $expectedText,
-    ) {
+    private string $selector;
+    private string $expectedText;
+
+    public function __construct(string $selector, string $expectedText)
+    {
+        $this->selector = $selector;
+        $this->expectedText = $expectedText;
     }
 
     public function toString(): string
     {
-        return \sprintf('has a node matching selector "%s" with content "%s"', $this->selector, $this->expectedText);
+        return sprintf('has a node matching selector "%s" with content "%s"', $this->selector, $this->expectedText);
     }
 
     /**

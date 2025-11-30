@@ -16,14 +16,16 @@ use Symfony\Component\DomCrawler\Crawler;
 
 final class CrawlerSelectorExists extends Constraint
 {
-    public function __construct(
-        private string $selector,
-    ) {
+    private string $selector;
+
+    public function __construct(string $selector)
+    {
+        $this->selector = $selector;
     }
 
     public function toString(): string
     {
-        return \sprintf('matches selector "%s"', $this->selector);
+        return sprintf('matches selector "%s"', $this->selector);
     }
 
     /**

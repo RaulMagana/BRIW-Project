@@ -2,8 +2,8 @@
     "require": {
         "solarium/solarium": "^6.4",
         "guzzlehttp/guzzle": "^7.10",
-        "symfony/dom-crawler": "^8.0",
-        "symfony/css-selector": "^8.0",
-        "symfony/event-dispatcher": "^8.0"
+        "symfony/dom-crawler": "7.0",
+        "symfony/css-selector": "7.0",
+        "symfony/event-dispatcher": "7.0"
     }
 }
