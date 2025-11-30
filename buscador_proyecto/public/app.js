@@ -87,11 +87,15 @@ function renderizar(data) {
     resultsDiv.innerHTML = '';
     facetsDiv.innerHTML = '<h3>Filtros</h3>';
     correctionDiv.innerHTML = '';
+    
+    // --- NUEVA LÍNEA: Mostrar el total de resultados ---
+    if (data.total !== undefined && data.total > 0) {
+        resultsDiv.innerHTML = `<h2>${data.total} resultados encontrados</h2>`;
+    }
 
     // ----------------------------------------------------
     // SOLUCIÓN CORRECCIÓN (DID YOU MEAN)
     // ----------------------------------------------------
-    // El PHP debe enviar data.suggestion limpio
     if (data.suggestion) {
         correctionDiv.innerHTML = `
             <div style="background-color: #ffe6e6; padding: 10px; border: 1px solid red; margin-bottom: 15px;">
@@ -123,7 +127,7 @@ function renderizar(data) {
     }
 
     // ----------------------------------------------------
-    // SOLUCIÓN SNIPPETS
+    // SOLUCIÓN SNIPPETS Y NIVELES 1 & 2
     // ----------------------------------------------------
     if (!data.results || data.results.length === 0) {
         resultsDiv.innerHTML = '<p>No se encontraron resultados.</p>';
@@ -135,12 +139,47 @@ function renderizar(data) {
         item.className = 'result-item';
         item.style.marginBottom = "20px";
         
+        // --- 1. PREPARACIÓN DE VARIABLES ---
+        const queryClean = document.getElementById('query').value.trim().toLowerCase();
+        const tituloClean = (doc.titulo || '').toLowerCase();
+        
+        let badge = '';
+        
+        // NIVEL 1: Score Numérico
+        const scoreNum = doc.score ? parseFloat(doc.score).toFixed(4) : 'N/A';
+
+        // --- 2. LÓGICA DE BADGES (NIVEL 2: Relevancia Ponderada) ---
+        
+        // Si la búsqueda tiene más de 2 letras y aparece en el título (demostrando el boost x2)...
+        if (queryClean.length > 2 && tituloClean.includes(queryClean)) {
+            badge = `<span style="background: #ffd700; color: #000; padding: 2px 6px; font-size: 0.7em; border-radius: 4px; margin-left: 10px; border: 1px solid #d4af37; vertical-align: middle;">
+                        ★ Relevancia Alta (x2 Título)
+                     </span>`;
+        }
+        
+        // --- 3. CONSTRUCCIÓN DEL HTML ---
         item.innerHTML = `
-            <h3><a href="${doc.url || '#'}" target="_blank">${doc.titulo}</a></h3>
-            <p style="color:green; font-size: 0.9em;">${doc.url || ''} - <span style="background:#eee; padding:2px;">${doc.categoria || 'General'}</span></p>
-            <p class="snippet" style="font-size: 0.95em; color: #444;">... ${doc.snippet || ''} ...</p>
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <h3 style="margin-top:0;">
+                    <a href="${doc.url || '#'}" target="_blank">${doc.titulo}</a>
+                    ${badge} 
+                </h3>
+                
+                <span style="background: #e1ecf4; color: #00529b; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; white-space: nowrap; margin-left: 10px;">
+                    Relevancia: ${scoreNum}
+                </span>
+            </div>
+
+            <p style="color:green; font-size: 0.9em; margin-top: 5px;">
+                ${doc.url || ''} - <span style="background:#eee; padding:2px;">${doc.categoria || 'General'}</span>
+            </p>
+            
+            <p class="snippet" style="font-size: 0.95em; color: #444;">
+                ... ${doc.snippet || ''} ...
+            </p>
             <hr style="border: 0; border-top: 1px solid #eee;">
         `;
+        
         resultsDiv.appendChild(item);
     });
 }

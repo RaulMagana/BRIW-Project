@@ -7,13 +7,12 @@ use Solarium\Client;
 use Solarium\Core\Client\Adapter\Curl;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 
-
-
 $config = [
     'endpoint' => [
         'localhost' => [
             'host' => '127.0.0.1', 
-            'port' => 8983, 'path' => '/', 
+            'port' => 8983, 
+            'path' => '/', 
             'core' => 'buscador_proyecto'
         ]
     ]
@@ -22,55 +21,54 @@ $adapter = new Curl();
 $eventDispatcher = new EventDispatcher();
 $client = new Client($adapter, $eventDispatcher, $config);
 
+// 1. Obtener término original
 $queryTerm = $_GET['q'] ?? '*:*';
 
-
-
-// Crear consulta
+// 2. Crear consulta
 $query = $client->createSelect();
 
-// Configuración del parser eDisMax  para que funcione la sintaxis booleana nativa
+// 3. Configuración del parser eDisMax
 $dismax = $query->getEDisMax();
+$dismax->setQueryFields('titulo^2.0 contenido^1.0'); // Relevancia Ponderada
 
-// Aquí definimos dónde buscar. 
-// Título vale x2 (Requisito 2 cumplido).
-$dismax->setQueryFields('titulo^2.0 contenido^1.0');
+// 4. LÓGICA DE CORRECCIÓN BOOLEANA (AND/OR/NOT)
+// ---------------------------------------------------------
+$terminoOriginal = $queryTerm;
 
-// Lógica de Expansión de Consulta
-$finalQueryString = $queryTerm;
+// Diccionario de reemplazo (espacios importantes para no romper palabras)
+$reemplazos = [
+    ' and ' => ' AND ',
+    ' or '  => ' OR ',
+    ' not ' => ' NOT ',
+    ' y '   => ' AND ',  // Español
+    ' o '   => ' OR ',   // Español
+    ' ni '  => ' NOT '   // Español
+];
 
+// Reemplazo insensible a mayúsculas/minúsculas
+$queryFinal = str_ireplace(array_keys($reemplazos), array_values($reemplazos), $terminoOriginal);
 
-// Establecer la query final suponiendo que se ha expandido correctamente sino solo se remplaza el parametro por "queryTerm"
-$query->setQuery($finalQueryString);
+// --- IMPORTANTE: ASIGNAMOS LA QUERY CORREGIDA UNA SOLA VEZ ---
+$query->setQuery($queryFinal);
+// ---------------------------------------------------------
 
-// 3. Búsqueda Facetada (4 pts) - categoría se obtiene automáticamente del documento pero es muy simple MEJORAR LA BUSQUEDA FACETADA esta relacionada con el crawler, desde el crawler determina la categoria. MODIFICAR!!!!
+// 5. Búsqueda Facetada
 $facetSet = $query->getFacetSet();
 $facetSet->createFacetField('categorias')->setField('categoria');
 
-// 4. Resultados con Snippets / Highlighting (2 pts) LISTO, ya resalta en el contenido las palabras buscadas
+// 6. Highlighting (Snippets)
 $hl = $query->getHighlighting();
 $hl->setFields('contenido');
 $hl->setSimplePrefix('<strong>')->setSimplePostfix('</strong>');
 $hl->setSnippets(2);
 
-// 5. Sugerencias de corrección "Did you mean" (3 pts) NO FUNCIONA
+// 7. Spellcheck
 $spell = $query->getSpellcheck();
 $spell->setQuery($queryTerm);
 $spell->setCount(1);
 $spell->setCollate(true);
 
-
-
-
-
-
-
-
-
-
-
-
-// Ejecutar
+// 8. Ejecutar
 try {
     $resultset = $client->select($query);
 } catch (Exception $e) {
@@ -78,7 +76,7 @@ try {
     exit;
 }
 
-// Preparar respuesta JSON
+// 9. Preparar respuesta
 $docs = [];
 $highlighting = $resultset->getHighlighting();
 
@@ -91,18 +89,19 @@ foreach ($resultset as $document) {
         'titulo' => $document->titulo,
         'url' => $document->url,
         'categoria' => $document->categoria,
-        'snippet' => $snippetText
+        'snippet' => $snippetText,
+        'score' => $document->score
     ];
 }
 
-// Obtener facetas (categorías del índice)
+// Obtener facetas
 $facets = $resultset->getFacetSet()->getFacet('categorias');
 $facetData = [];
 foreach ($facets as $value => $count) {
     if ($count > 0) $facetData[$value] = $count;
 }
 
-// PROCESAR CORRECCIÓN ORTOGRÁFICA
+// Obtener sugerencia ortográfica
 $suggestion = null;
 $spellChk = $resultset->getSpellcheck();
 if ($spellChk && !$spellChk->getCorrectlySpelled()) {

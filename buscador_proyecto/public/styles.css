@@ -188,6 +188,19 @@ section#results-area {
     border-radius: 3px;
     font-weight: 600;
 }
+/* Esto asegura que el texto dentro del snippet solo ocupe 5 líneas */
+.result-item .snippet {
+    /* 1. Limita la altura: Asegura que no crezca más de 5 líneas */
+    display: -webkit-box;
+    -webkit-line-clamp: 5; /* Número de líneas deseadas */
+    -webkit-box-orient: vertical;
+    overflow: hidden; /* Oculta el texto que desborda */
+    text-overflow: ellipsis; /* Añade los puntos suspensivos (...) al final */
+    
+    /* Estilos existentes */
+    font-size: 0.95em;
+    color: #444;
+}
 
 #correction-area {
     margin-bottom: 20px;
