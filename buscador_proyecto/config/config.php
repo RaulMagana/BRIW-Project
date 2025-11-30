@@ -6,8 +6,7 @@ $config = [
         'localhost' => [
             'host' => '127.0.0.1',
             'port' => 8983,
-            // Aquí definimos la ruta correcta y el core correcto
-            'path' => '/solr/',
+            'path' => '/',
             'core' => 'buscador_proyecto',
         ]
     ]
