@@ -14,7 +14,7 @@ $campos = [
     ['name' => 'url_str',      'type' => 'string',  'stored' => true, 'indexed' => true],
     
     // El crawler usa 'desc_texto', así que definimos ese
-    ['name' => 'desc_texto',   'type' => 'text_es', 'stored' => true, 'indexed' => true],
+    ['name' => 'desc_texto',   'type' => 'text_general', 'stored' => true, 'indexed' => true], //cambie text_es a text_general
     
     // Agregamos categoría por si decides usarlo en el futuro (opcional)
     ['name' => 'categoria',    'type' => 'string',  'stored' => true, 'indexed' => true],
