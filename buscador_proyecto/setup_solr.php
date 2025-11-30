@@ -1,33 +1,39 @@
 <?php
-// Ajustamos la ruta para encontrar tu archivo de configuración
 require 'config/config.php';
 
 echo "--- Configurando Esquema de Solr ---\n";
 
 $client = getSolrClient($config);
 
-// Definimos los campos que usará el buscador
+// Definimos los campos coincidiendo con tu CRAWLER ACTUAL
 $campos = [
-    // type: text_general permite búsqueda aproximada, sinónimos, minúsculas, etc.
-    ['name' => 'titulo_texto', 'type' => 'text_general', 'stored' => true, 'indexed' => true],
-    // type: string es para búsqueda exacta (útil para facetas o URLs)
-    ['name' => 'url_str',      'type' => 'string',       'stored' => true, 'indexed' => true],
-    ['name' => 'desc_texto',   'type' => 'text_general', 'stored' => true, 'indexed' => true],
+    // El crawler usa 'titulo_texto', así que definimos ese
+    ['name' => 'titulo_texto', 'type' => 'text_es', 'stored' => true, 'indexed' => true],
+    
+    // El crawler usa 'url_str', así que definimos ese
+    ['name' => 'url_str',      'type' => 'string',  'stored' => true, 'indexed' => true],
+    
+    // El crawler usa 'desc_texto', así que definimos ese
+    ['name' => 'desc_texto',   'type' => 'text_es', 'stored' => true, 'indexed' => true],
+    
+    // Agregamos categoría por si decides usarlo en el futuro (opcional)
+    ['name' => 'categoria',    'type' => 'string',  'stored' => true, 'indexed' => true],
 ];
 
 foreach ($campos as $campo) {
     $guzzle = new \GuzzleHttp\Client();
     
     try {
-        // Llamamos a la API Schema de Solr
-        $response = $guzzle->post('http://localhost:8983/solr/buscador_proyecto/schema', [
+        // Usamos la configuración correcta del config.php para la URL
+        $baseUrl = 'http://' . $config['endpoint']['localhost']['host'] . ':' . $config['endpoint']['localhost']['port'] . $config['endpoint']['localhost']['path'] . $config['endpoint']['localhost']['core'];
+        
+        $response = $guzzle->post($baseUrl . '/schema', [
             'json' => [
                 'add-field' => $campo
             ]
         ]);
         echo "Campo '{$campo['name']}' creado/verificado.\n";
     } catch (\Exception $e) {
-        // Ignoramos error si ya existe
         echo "Nota: El campo '{$campo['name']}' ya existía o hubo un error menor.\n";
     }
 }
