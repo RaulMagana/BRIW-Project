@@ -1,7 +1,7 @@
 <?php
 require __DIR__ . '/../vendor/autoload.php';
+// Asegúrate de que esta ruta sea correcta según tu estructura
 require __DIR__ . '/../utils/preprocess.php';
-require __DIR__ . '/../config/config.php'; // Usamos la configuración central
 
 use GuzzleHttp\Client;
 use Symfony\Component\DomCrawler\Crawler;
@@ -14,8 +14,9 @@ class SolrDeepCrawler
     private $solr;
     private $httpClient;
     private $visitedUrls = []; 
-    private $maxDepth = 2;
+    private $maxDepth = 2; // Aumentado a 2 para probar mejor la navegación profunda
 
+    // Lista negra de palabras en la URL (Namespaces de MediaWiki y otros)
     private $urlBlacklist = [
         'Especial:', 'Special:', 
         'Wikipedia:', 'Project:',
@@ -33,12 +34,23 @@ class SolrDeepCrawler
 
     public function __construct()
     {
-        // Usamos el config.php central
-        $this->solr = getSolrClient($config);
+        // 1. Configuración Solr
+        $config = [
+            'endpoint' => [
+                'localhost' => [
+                    'host' => '127.0.0.1',
+                    'port' => 8983,
+                    'path' => '/',
+                    'core' => 'buscador_proyecto'
+                ]
+            ]
+        ];
+        $this->solr = new SolrClient(new Curl(), new EventDispatcher(), $config);
 
+        // 2. Configuración Guzzle
         $this->httpClient = new Client([
             'verify' => false,
-            'timeout' => 10,
+            'timeout' => 10, 
             'headers' => [
                 'User-Agent' => 'Mozilla/5.0 (compatible; BuscadorProyectoBot/1.0)'
             ]
@@ -57,7 +69,9 @@ class SolrDeepCrawler
     {
         $url = rtrim($url, '/');
 
-        if (in_array($url, $this->visitedUrls)) return;
+        if (in_array($url, $this->visitedUrls)) {
+            return;
+        }
         $this->visitedUrls[] = $url;
 
         $indent = str_repeat("    ", $currentDepth);
@@ -69,13 +83,23 @@ class SolrDeepCrawler
             $html = (string) $response->getBody();
             $crawler = new Crawler($html);
 
+            // 1. Indexar el contenido actual
             $this->indexToSolr($url, $crawler);
 
+            // 2. Buscar nuevos enlaces si no hemos llegado al límite
             if ($currentDepth < $this->maxDepth) {
+                
+                // Obtener dominio base de la URL actual para restringir la navegación
                 $currentHost = parse_url($url, PHP_URL_HOST);
+
+                // Selector: buscamos enlaces dentro del contenido principal para evitar menús
+                // En Wikipedia, el contenido está en #bodyContent. Si no existe, usa 'body'
                 $selectorContexto = $crawler->filter('#bodyContent')->count() > 0 ? '#bodyContent a[href]' : 'body a[href]';
                 
-                $links = $crawler->filter($selectorContexto)->each(fn(Crawler $node) => $node->attr('href'));
+                $links = $crawler->filter($selectorContexto)->each(function (Crawler $node) {
+                    return $node->attr('href');
+                });
+
                 $links = array_unique($links);
                 $count = 0; 
 
@@ -84,13 +108,24 @@ class SolrDeepCrawler
                 foreach ($links as $link) {
                     $link = trim($link);
 
-                    if (strpos($link, '/') === 0) $fullUrl = $baseUrl . $link;
-                    elseif (strpos($link, 'http') === 0) $fullUrl = $link;
-                    else continue;
+                    // Reconstrucción básica de URL absoluta
+                    if (strpos($link, '/') === 0) {
+                        $fullUrl = $baseUrl . $link;
+                    } elseif (strpos($link, 'http') === 0) {
+                        $fullUrl = $link;
+                    } else {
+                        // Ignorar enlaces "raros" o relativos complejos por ahora
+                        continue;
+                    }
 
-                    if (!$this->isValidLink($fullUrl, $currentHost)) continue;
+                    // --- FILTRO MAESTRO ---
+                    if (!$this->isValidLink($fullUrl, $currentHost)) {
+                        continue;
+                    }
 
+                    // Límite por página para no saturar
                     if ($count >= 10) break;
+
                     $count++;
                     $this->processUrl($fullUrl, $currentDepth + 1);
                 }
@@ -101,15 +136,27 @@ class SolrDeepCrawler
         }
     }
 
+    /**
+     * Verifica si un enlace es válido para ser visitado
+     */
     private function isValidLink($url, $allowedHost)
     {
+        // 1. Validar que sea del mismo dominio (evita ir a facebook, ace.wikipedia, etc.)
         $linkHost = parse_url($url, PHP_URL_HOST);
-        if ($linkHost !== $allowedHost) return false;
+        if ($linkHost !== $allowedHost) {
+            return false;
+        }
 
-        if (preg_match('/\.(jpg|jpeg|png|gif|pdf|doc|docx|zip|rar|css|js)$/i', $url)) return false;
+        // 2. Validar extensiones de archivos estáticos (evita descargar imágenes o pdfs grandes)
+        if (preg_match('/\.(jpg|jpeg|png|gif|pdf|doc|docx|zip|rar|css|js)$/i', $url)) {
+            return false;
+        }
 
+        // 3. Validar contra la Lista Negra (evita Especial:, Portal:, Login, etc.)
         foreach ($this->urlBlacklist as $blacklisted) {
-            if (stripos($url, $blacklisted) !== false) return false;
+            if (stripos($url, $blacklisted) !== false) {
+                return false;
+            }
         }
 
         return true;
@@ -121,20 +168,34 @@ class SolrDeepCrawler
             $update = $this->solr->createUpdate();
             $doc = $update->createDocument();
 
-            $titulo = 'Sin titulo';
-            if ($crawler->filter('h1')->count() > 0) $titulo = $crawler->filter('h1')->text();
-            elseif ($crawler->filter('title')->count() > 0) $titulo = $crawler->filter('title')->text();
-
+            // Título
+            if ($crawler->filter('h1')->count() > 0) {
+                $titulo = $crawler->filter('h1')->text();
+            } elseif ($crawler->filter('title')->count() > 0) {
+                $titulo = $crawler->filter('title')->text();
+            } else {
+                $titulo = 'Sin titulo';
+            }
+            
+            // Extracción de contenido usando HTML para el preprocesador
             $contenidoHtml = '';
+            // Priorizamos párrafos del contenido principal
             $selectorTexto = $crawler->filter('#bodyContent p')->count() > 0 ? '#bodyContent p' : 'body p';
+            
             $crawler->filter($selectorTexto)->each(function (Crawler $node) use (&$contenidoHtml) {
                 $contenidoHtml .= $node->html() . ' ';
             });
-            if (strlen($contenidoHtml) < 50) $contenidoHtml = $crawler->filter('body')->html();
 
+            // Si falla, fallback
+            if (strlen($contenidoHtml) < 50) {
+                $contenidoHtml = $crawler->filter('body')->html();
+            }
+
+            // --- PROCESAMIENTO ---
             $tokens = Preprocessor::process($contenidoHtml);
             $contenidoLimpio = implode(' ', $tokens);
 
+            // Filtro de calidad: Si la página tiene muy poco texto útil, no indexar
             if (strlen($contenidoLimpio) < 100) {
                 echo "    -> [SKIP] Contenido insuficiente ($titulo)\n";
                 return;
@@ -143,14 +204,15 @@ class SolrDeepCrawler
             $contenidoSeguro = mb_substr($contenidoLimpio, 0, 30000, "UTF-8");
 
             $doc->id = md5($url);
-            $doc->titulo_texto = $titulo;
-            $doc->desc_texto   = $contenidoSeguro;
-            $doc->url_str      = $url;
+            $doc->titulo = $titulo;
+            $doc->contenido = $contenidoSeguro;
+            $doc->url = $url;
+            $doc->categoria = (strpos($contenidoSeguro, 'tecnologia') !== false) ? 'Tecnología' : 'General';
 
             $update->addDocument($doc);
             $update->addCommit();
             $this->solr->update($update);
-
+            
             echo "    -> [SOLR] OK: " . substr($titulo, 0, 30) . "\n";
 
         } catch (Exception $e) {
