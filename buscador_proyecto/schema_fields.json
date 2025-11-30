@@ -1,0 +1,29 @@
+{
+  "add-field": [
+    {
+      "name": "titulo",
+      "type": "text_es",
+      "stored": true,
+      "indexed": true
+    },
+    {
+      "name": "contenido",
+      "type": "text_es",
+      "stored": true,
+      "indexed": true
+    },
+    {
+      "name": "categoria",
+      "type": "string",
+      "stored": true,
+      "indexed": true,
+      "multiValued": false
+    },
+    {
+      "name": "url",
+      "type": "string",
+      "stored": true,
+      "indexed": true
+    }
+  ]
+}

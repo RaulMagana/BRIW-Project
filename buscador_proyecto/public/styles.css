@@ -1,0 +1,9 @@
+body { font-family: sans-serif; padding: 20px; }
+.main-layout { display: flex; margin-top: 20px; }
+aside { width: 20%; background: #f4f4f4; padding: 10px; margin-right: 20px; }
+section { width: 80%; }
+.result-item { margin-bottom: 20px; }
+.snippet strong { background-color: yellow; } /* Resaltado */
+.facet-item { cursor: pointer; color: blue; margin-bottom: 5px; }
+.facet-item:hover { text-decoration: underline; }
+#correction-area { color: red; margin-top: 10px; }

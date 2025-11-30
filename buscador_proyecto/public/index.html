@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Buscador Inteligente</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; display: flex; flex-direction: column; }
+        .top-bar { margin-bottom: 20px; }
+        .main-layout { display: flex; }
+        aside { width: 250px; background: #f9f9f9; padding: 15px; border-right: 1px solid #ddd; margin-right: 20px; }
+        section { flex: 1; }
+        input[type="text"] { padding: 10px; width: 300px; font-size: 16px; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <h1>Buscador Inteligente</h1>
+        
+        <input type="text" id="query" placeholder="Buscar..." list="suggestions" autocomplete="off">
+        <datalist id="suggestions"></datalist>
+        
+        <button id="btn-search">Buscar</button>
+    </div>
+
+    <div id="correction-area"></div>
+
+    <div class="main-layout">
+        <aside id="facets-area">
+            <h3>Filtros</h3>
+            </aside>
+        <section id="results-area">
+            </section>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
