@@ -1,5 +1,4 @@
 <?php
-// Fíjate en el "/../" para salir de la carpeta config y buscar vendor
 require __DIR__ . '/../vendor/autoload.php'; 
 
 $config = [
@@ -7,14 +6,14 @@ $config = [
         'localhost' => [
             'host' => '127.0.0.1',
             'port' => 8983,
-            'path' => '/',
-            'core' => 'buscador_empresarial',
+            // Aquí definimos la ruta correcta y el core correcto
+            'path' => '/solr/',
+            'core' => 'buscador_proyecto',
         ]
     ]
 ];
 
 function getSolrClient($config) {
-    // Usamos el EventDispatcher y Curl correctamente
     return new \Solarium\Client(
         new \Solarium\Core\Client\Adapter\Curl(), 
         new \Symfony\Component\EventDispatcher\EventDispatcher(), 

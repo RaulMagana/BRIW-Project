@@ -40,7 +40,7 @@ class SolrDeepCrawler
                 'localhost' => [
                     'host' => '127.0.0.1',
                     'port' => 8983,
-                    'path' => '/',
+                    'path' => '/solr/',
                     'core' => 'buscador_proyecto'
                 ]
             ]

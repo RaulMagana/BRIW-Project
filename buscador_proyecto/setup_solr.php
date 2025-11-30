@@ -20,7 +20,7 @@ foreach ($campos as $campo) {
     
     try {
         // Llamamos a la API Schema de Solr
-        $response = $guzzle->post('http://localhost:8983/solr/buscador_empresarial/schema', [
+        $response = $guzzle->post('http://localhost:8983/solr/buscador_proyecto/schema', [
             'json' => [
                 'add-field' => $campo
             ]
