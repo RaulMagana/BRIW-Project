@@ -21,23 +21,30 @@ document.addEventListener('DOMContentLoaded', () => {
     // SOLUCIÓN SUGERENCIAS DE LLENADO (AUTOCOMPLETE)
     // ----------------------------------------------------
     document.getElementById('query').addEventListener('input', async (e) => {
-        const val = e.target.value;
+        const val = e.target.value.trim();
         if (val.length < 3) return; // No buscar si es muy corto
 
         try {
-            // Llamamos a search.php en segundo plano
-            const response = await fetch(`search.php?q=${encodeURIComponent(val)}`);
+            // CORRECCIÓN IMPORTANTE: 
+            // Agregamos '*' al final para que Solr haga búsqueda parcial (prefix search)
+            // Ejemplo: si escribes "com", busca "com*" y halla "computadora"
+            const term = val + '*'; 
+            
+            // Llamamos a search.php pasando el término con asterisco
+            const response = await fetch(`search.php?q=${encodeURIComponent(term)}`);
             const data = await response.json();
             
             const dataList = document.getElementById('suggestions');
             dataList.innerHTML = ''; // Limpiar anteriores
 
             // Agregar títulos encontrados como sugerencias
-            data.results.slice(0, 5).forEach(r => {
-                const opt = document.createElement('option');
-                opt.value = r.titulo; // Sugerir el título completo
-                dataList.appendChild(opt);
-            });
+            if (data.results && data.results.length > 0) {
+                data.results.slice(0, 5).forEach(r => {
+                    const opt = document.createElement('option');
+                    opt.value = r.titulo; // Sugerir el título completo
+                    dataList.appendChild(opt);
+                });
+            }
         } catch (error) {
             console.error("Error obteniendo sugerencias:", error);
         }
@@ -60,6 +67,9 @@ async function buscar(filtroCategoria = null) {
         url += `&cat=${encodeURIComponent(currentCategory)}`;
     }
 
+    // Para la búsqueda principal, pedimos explícitamente el spellcheck
+    url += '&spellcheck=true';
+
     try {
         const response = await fetch(url);
         const data = await response.json();
@@ -81,6 +91,7 @@ function renderizar(data) {
     // ----------------------------------------------------
     // SOLUCIÓN CORRECCIÓN (DID YOU MEAN)
     // ----------------------------------------------------
+    // El PHP debe enviar data.suggestion limpio
     if (data.suggestion) {
         correctionDiv.innerHTML = `
             <div style="background-color: #ffe6e6; padding: 10px; border: 1px solid red; margin-bottom: 15px;">
@@ -95,13 +106,11 @@ function renderizar(data) {
     // ----------------------------------------------------
     // SOLUCIÓN FACETAS
     // ----------------------------------------------------
-    if (Object.keys(data.facets).length > 0) {
+    if (data.facets && Object.keys(data.facets).length > 0) {
         for (const [cat, count] of Object.entries(data.facets)) {
-            // Si la categoría está activa, la mostramos en negrita/diferente
             const estilo = (cat === currentCategory) ? 'font-weight:bold; color:black;' : 'color:blue; cursor:pointer;';
             const marcador = (cat === currentCategory) ? ' [x]' : '';
             
-            // Al hacer clic, llamamos a buscar pasando la categoría
             facetsDiv.innerHTML += `
                 <div style="margin-bottom: 5px;">
                     <span style="${estilo}" onclick="buscar('${cat}')">
@@ -116,7 +125,7 @@ function renderizar(data) {
     // ----------------------------------------------------
     // SOLUCIÓN SNIPPETS
     // ----------------------------------------------------
-    if (data.results.length === 0) {
+    if (!data.results || data.results.length === 0) {
         resultsDiv.innerHTML = '<p>No se encontraron resultados.</p>';
         return;
     }
@@ -126,11 +135,10 @@ function renderizar(data) {
         item.className = 'result-item';
         item.style.marginBottom = "20px";
         
-        // Renderizamos el snippet HTML tal cual viene (con <strong>)
         item.innerHTML = `
-            <h3><a href="${doc.url}" target="_blank">${doc.titulo}</a></h3>
-            <p style="color:green; font-size: 0.9em;">${doc.url} - <span style="background:#eee; padding:2px;">${doc.categoria}</span></p>
-            <p class="snippet" style="font-size: 0.95em; color: #444;">... ${doc.snippet} ...</p>
+            <h3><a href="${doc.url || '#'}" target="_blank">${doc.titulo}</a></h3>
+            <p style="color:green; font-size: 0.9em;">${doc.url || ''} - <span style="background:#eee; padding:2px;">${doc.categoria || 'General'}</span></p>
+            <p class="snippet" style="font-size: 0.95em; color: #444;">... ${doc.snippet || ''} ...</p>
             <hr style="border: 0; border-top: 1px solid #eee;">
         `;
         resultsDiv.appendChild(item);
@@ -139,6 +147,6 @@ function renderizar(data) {
 
 function usarSugerencia(texto) {
     document.getElementById('query').value = texto;
-    currentCategory = null; // Resetear filtros al aceptar sugerencia
+    currentCategory = null; 
     buscar();
 }

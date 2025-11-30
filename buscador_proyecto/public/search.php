@@ -7,6 +7,8 @@ use Solarium\Client;
 use Solarium\Core\Client\Adapter\Curl;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 
+
+
 $config = [
     'endpoint' => [
         'localhost' => [
@@ -22,64 +24,51 @@ $client = new Client($adapter, $eventDispatcher, $config);
 
 $queryTerm = $_GET['q'] ?? '*:*';
 
-// Expansion de consulta con Datamuse
-$finalQueryString = $queryTerm;
 
-if ($queryTerm !== '*:*' && trim($queryTerm) !== '') {
-    $qTrim = trim($queryTerm);
-    $expanded_terms = [];
-    
-    // Consultar Datamuse para obtener términos relacionados
-    $datamuse_url = DATAMUSE_API_URL . '?ml=' . urlencode($qTrim) . '&max=3';
-    $datamuse_json = @file_get_contents($datamuse_url);
-    
-    if ($datamuse_json) {
-        $words = json_decode($datamuse_json, true);
-        if (is_array($words)) {
-            foreach ($words as $word) {
-                if (!empty($word['word'])) {
-                    $expanded_terms[] = $word['word'];
-                }
-            }
-        }
-    }
-    
-    // Construir query: (término1 AND término2 ...) AND ("original" OR sinónimo1 OR sinónimo2 ...)
-    $base_query_terms = preg_split('/\s+/', $qTrim, -1, PREG_SPLIT_NO_EMPTY);
-    
-    if (!empty($base_query_terms)) {
-        $base_query_lucene = '(' . implode(' AND ', $base_query_terms) . ')';
-        $expansion_terms = array_merge([$qTrim], $expanded_terms);
-        $expansion_query = '(' . implode(' OR ', $expansion_terms) . ')';
-        $finalQueryString = $base_query_lucene . ' AND ' . $expansion_query;
-    }
-}
 
 // Crear consulta
 $query = $client->createSelect();
 
-// 1. Búsqueda Booleana (2 pts): Solr lo soporta nativamente (ej: "auto AND rojo")
-// 2. Relevancia Ponderada (4 pts): Título vale x2 más que el contenido
+// Configuración del parser eDisMax (Fundamental para que funcione la sintaxis booleana nativa)
 $dismax = $query->getEDisMax();
+
+// Aquí definimos dónde buscar. 
+// Título vale x2 (Requisito 2 cumplido).
 $dismax->setQueryFields('titulo^2.0 contenido^1.0');
 
+// Lógica de Expansión de Consulta
+$finalQueryString = $queryTerm;
+
+
+// Establecer la query final suponiendo que se ha expandido correctamente sino solo se remplaza el parametro por "queryTerm"
 $query->setQuery($finalQueryString);
 
-// 3. Búsqueda Facetada (4 pts) - categoría se obtiene automáticamente del documento
+// 3. Búsqueda Facetada (4 pts) - categoría se obtiene automáticamente del documento pero es muy simple MEJORAR LA BUSQUEDA FACETADA esta relacionada con el crawler, desde el crawler determina la categoria. MODIFICAR!!!!
 $facetSet = $query->getFacetSet();
 $facetSet->createFacetField('categorias')->setField('categoria');
 
-// 4. Resultados con Snippets / Highlighting (2 pts)
+// 4. Resultados con Snippets / Highlighting (2 pts) LISTO, ya resalta en el contenido las palabras buscadas
 $hl = $query->getHighlighting();
 $hl->setFields('contenido');
 $hl->setSimplePrefix('<strong>')->setSimplePostfix('</strong>');
 $hl->setSnippets(2);
 
-// 5. Sugerencias de corrección "Did you mean" (3 pts)
+// 5. Sugerencias de corrección "Did you mean" (3 pts) NO FUNCIONA
 $spell = $query->getSpellcheck();
 $spell->setQuery($queryTerm);
 $spell->setCount(1);
 $spell->setCollate(true);
+
+
+
+
+
+
+
+
+
+
+
 
 // Ejecutar
 try {
