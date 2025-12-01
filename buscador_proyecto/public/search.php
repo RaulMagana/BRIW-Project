@@ -1,7 +1,8 @@
 <?php
-// search.php - VERSIÓN DE DIAGNÓSTICO
-error_reporting(E_ALL); // Reportar todos los errores
-ini_set('display_errors', 0); // Pero no imprimirlos en el HTML para no romper el JSON
+// search.php - VERSIÓN FINAL LIMPIA
+error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE);
+ini_set('display_errors', 0);
+
 require __DIR__ . '/../vendor/autoload.php';
 require __DIR__ . '/../config/config_query_expansion.php';
 header('Content-Type: application/json');
@@ -10,42 +11,31 @@ use Solarium\Client;
 use Solarium\Core\Client\Adapter\Curl;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 
-// --- VARIABLE GLOBAL PARA GUARDAR ERRORES DE GEMINI ---
-$geminiDebug = ["status" => "No se intentó conectar"];
-
 // ==========================================
-// 1. FUNCIÓN GEMINI CON DIAGNÓSTICO
+// 1. FUNCIÓN GEMINI (CONEXIÓN Y LÓGICA)
+// ==========================================
+// ==========================================
+// FUNCIÓN GEMINI (FINAL Y MINIMALISTA)
 // ==========================================
 function obtenerSinonimosGemini($termino) {
     global $geminiDebug;
     
-    
-    // -----------------------------------------------------------
-    $apiKey = 'AIzaSyD1FdqwD_KhGzaJUNbwbH-pim65_0l7hl0'; 
-    // -----------------------------------------------------------
+  
+    $apiKey = 'llave'; 
+ 
 
-    if ($apiKey === 'TU_API_KEY_DE_GOOGLE') {
-        $geminiDebug = ["error" => "FALTA LA API KEY. Reemplaza el texto en el código."];
+    if (strpos($apiKey, 'TU_LLAVE_REAL') !== false || strlen($termino) < 3) {
+        $geminiDebug = ["error" => "FALTA LA API KEY."];
         return [];
     }
 
-   // Cambiamos 'v1beta' por 'v1' y usamos el modelo clásico
-$url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" . $apiKey;
+    // Usamos el modelo 2.0 que tienes acceso
+    $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" . $apiKey;
     
-    $prompt = "Eres un buscador experto. Devuelve SOLAMENTE un array JSON crudo con 3 sinónimos para: '$termino'. Ejemplo: [\"sinonimo1\", \"sinonimo2\"]";
+    $prompt = "Contexto: Buscador de Tecnología. Genera un array JSON con 3 sinónimos técnicos en español para: '$termino'. IGNORA otros idiomas. Ejemplo: [\"sinonimo1\"]";
 
-
-  // CONFIGURACIÓN SIMPLE (A prueba de fallos)
-    $data = [
-        'contents' => [
-            [
-                'parts' => [
-                    ['text' => $prompt]
-                ]
-            ]
-        ]
-        // Eliminamos 'generationConfig' por completo para evitar errores
-    ];
+    // CARGA DE DATOS: (Estructura más simple para evitar el 400)
+    $data = ['contents' => [[ 'parts' => [ ['text' => $prompt] ] ]]];
 
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_POST, 1);
@@ -53,44 +43,38 @@ $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash
     curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     
-    // --- FIX PARA MAC/LOCALHOST (SSL) ---
+    // Fix SSL
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 5); // 5 segundos de espera máximo
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
 
     $response = curl_exec($ch);
     $curlError = curl_error($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
 
-
-    // GUARDAR DIAGNÓSTICO
     if ($curlError) {
         $geminiDebug = ["error_conexion" => $curlError];
         return [];
     }
     
-    $geminiDebug = [
-        "status" => "Conectado",
-        "codigo_http" => $httpCode,
-        "respuesta_raw" => substr($response, 0, 200) . "..." // Mostramos los primeros 200 caracteres
-    ];
+    $geminiDebug = ["status" => "Conectado", "codigo_http" => $httpCode];
 
-    // Procesar JSON
     if ($response) {
         $json = json_decode($response, true);
+        
+        // Verificación de error de Google
+        if (isset($json['error'])) {
+             $geminiDebug = ["error_fatal" => $json['error']['message']];
+             return [];
+        }
+
+        // Procesamiento exitoso
         if (isset($json['candidates'][0]['content']['parts'][0]['text'])) {
             $rawText = $json['candidates'][0]['content']['parts'][0]['text'];
             $rawText = str_replace(['```json', '```'], '', $rawText);
             $sinonimos = json_decode($rawText, true);
 
-            if (is_array($sinonimos)) {
-                return $sinonimos;
-            } else {
-                $geminiDebug["error_parsing"] = "Google respondió, pero no era un array JSON válido.";
-            }
-        } else {
-            $geminiDebug["error_api"] = "La estructura del JSON de Google no es la esperada (Posible error de cuota o modelo).";
+            if (is_array($sinonimos)) return $sinonimos;
         }
     }
 
@@ -103,12 +87,7 @@ $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash
 
 $config = [
     'endpoint' => [
-        'localhost' => [
-            'host' => '127.0.0.1', 
-            'port' => 8983, 
-            'path' => '/', 
-            'core' => 'buscador_proyecto'
-        ]
+        'localhost' => ['host' => '127.0.0.1', 'port' => 8983, 'path' => '/', 'core' => 'buscador_proyecto']
     ]
 ];
 $client = new Client(new Curl(), new EventDispatcher(), $config);
@@ -117,27 +96,23 @@ $query = $client->createSelect();
 $dismax = $query->getEDisMax();
 $dismax->setQueryFields('titulo^2.0 contenido^1.0');
 
-// Lógica Booleana
-$terminoOriginal = $queryTerm;
-$reemplazos = [' and ' => ' AND ', ' or ' => ' OR ', ' not ' => ' NOT '];
-$queryFinal = str_ireplace(array_keys($reemplazos), array_values($reemplazos), $terminoOriginal);
+// Lógica Booleana y Expansión (Se omite cache para simplicidad de debug)
+$queryFinal = $queryTerm;
 
-// --- EXPANSIÓN SEMÁNTICA ---
-// Solo si no es una búsqueda compleja
-if (strpos($queryFinal, ' AND ') === false && strpos($queryFinal, ' OR ') === false) {
-    // LLAMAMOS A LA FUNCIÓN (Sin caché por ahora, para probar conexión)
-    $sinonimos = obtenerSinonimosGemini($queryFinal);
+// Chequeo de API Key y llamada a Gemini
+if (strpos($queryTerm, ' AND ') === false && strpos($queryTerm, ' OR ') === false) {
+    $sinonimos = obtenerSinonimosGemini($queryTerm);
     
     if (!empty($sinonimos)) {
         $sinonimosQuotes = array_map(function($s) { return '"' . trim($s) . '"'; }, $sinonimos);
         $expansion = implode(' OR ', $sinonimosQuotes);
-        $queryFinal = "($queryFinal OR $expansion)";
+        $queryFinal = "($queryTerm OR $expansion)";
     }
 }
 
 $query->setQuery($queryFinal);
 
-// Facetas y Filtros
+// Facetas y Filtros (Completo)
 $facetSet = $query->getFacetSet();
 $facetSet->createFacetField('categorias')->setField('categoria_str');
 $facetSet->createFacetField('niveles_lectura')->setField('lectura_str');
@@ -150,9 +125,20 @@ foreach ($mapaFiltros as $paramUrl => $campoSolr) {
     }
 }
 
-// Highlighting & Spellcheck
-$query->getHighlighting()->setFields('contenido')->setSimplePrefix('<b>')->setSimplePostfix('</b>');
-$query->getSpellcheck()->setQuery($queryTerm)->setCount(1);
+// Highlighting y Snippets (AQUÍ ESTÁ LA LÍNEA PARA EL ÚLTIMO FIX)
+$hl = $query->getHighlighting();
+$hl->setFields('contenido');
+$hl->setSimplePrefix('<b>')->setSimplePostfix('</b>');
+$hl->setSnippets(1); 
+$hl->setFragSize(150); // Cortar snippet en Solr
+
+// Usar la query expandida para encontrar highlights
+$hl->setQuery($queryFinal); 
+
+$spell = $query->getSpellcheck();
+$spell->setQuery($queryTerm);
+$spell->setCount(1);
+$spell->setCollate(true);
 
 // Ejecutar
 try {
@@ -164,14 +150,26 @@ try {
 
 // Preparar respuesta
 $docs = [];
-foreach ($resultset as $doc) {
+$highlighting = $resultset->getHighlighting();
+
+foreach ($resultset as $document) {
+    // LÓGICA CORREGIDA DEL SNIPPET
+    $snip = $highlighting->getResult($document->id)->getField('contenido');
+    
+    if (count($snip) > 0) {
+        // Si hay highlight (éxito), usamos el primer fragmento (con <b> tags)
+        $rawSnippet = $snip[0]; 
+    } else {
+        // Fallback: Tomamos el texto original, lo limpiamos y cortamos
+        $contenidoOriginal = is_array($document->contenido) ? ($document->contenido[0] ?? '') : ($document->contenido ?? '');
+        $textoLimpio = strip_tags($contenidoOriginal);
+        $rawSnippet = mb_substr($textoLimpio, 0, 150) . '...';
+    }
+
     $docs[] = [
-        'titulo' => $doc->titulo,
-        'url' => $doc->url,
-        'categoria' => $doc->categoria,
-        'anio_str' => $doc->anio_str ?? null,
-        'lectura_str' => $doc->lectura_str ?? null,
-        'score' => $doc->score
+        'titulo' => $document->titulo, 'url' => $document->url, 'categoria' => $document->categoria,
+        'anio_str' => $document->anio_str ?? null, 'lectura_str' => $document->lectura_str ?? null,
+        'snippet' => $rawSnippet, 'score' => $document->score
     ];
 }
 
@@ -191,14 +189,11 @@ if ($spell = $resultset->getSpellcheck()) {
     foreach ($spell->getCollations() as $c) { $suggestion = $c->getQuery(); break; }
 }
 
-// --- RESPUESTA FINAL CON DIAGNÓSTICO ---
 echo json_encode([
     'results' => $docs,
     'facets' => $facetData,
     'suggestion' => $suggestion,
     'total' => $resultset->getNumFound(),
-    
-    // AQUÍ ESTÁ EL CHIVATO
     'debug_query' => $queryFinal,
     'gemini_status' => $geminiDebug 
 ]);

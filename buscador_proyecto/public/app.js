@@ -174,11 +174,10 @@ function renderizarResultados(data) {
         if (doc.lectura_str) infoExtra += `<span style="background:#e3f2fd; color:#0d47a1; padding:2px 6px; border-radius:4px; font-size:0.8em;">⏱ ${doc.lectura_str}</span>`;
 
         // HTML del Item
-        item.innerHTML = `
+       item.innerHTML = `
             <div style="display:flex; justify-content:space-between;">
                 <h3 style="margin:0 0 5px 0;">
                     <a href="${doc.url || '#'}" target="_blank" style="text-decoration:none; color:#1a0dab; font-size:1.2rem;">${doc.titulo}</a>
-                    ${badge}
                 </h3>
                 <span style="font-size:0.8em; color:#777;">Score: ${parseFloat(doc.score).toFixed(2)}</span>
             </div>
@@ -189,17 +188,32 @@ function renderizarResultados(data) {
 
             <div style="margin-bottom:8px;">
                 <span style="background:#f1f3f4; padding:2px 6px; border-radius:4px; font-size:0.8em; border:1px solid #dadce0;">${doc.categoria || 'General'}</span>
-                ${infoExtra}
+                ${doc.anio_str ? `<span style="background:#eee; padding:2px 6px; border-radius:4px; font-size:0.8em; margin-right:5px;">📅 ${doc.anio_str}</span>` : ''}
+                ${doc.lectura_str ? `<span style="background:#e3f2fd; color:#0d47a1; padding:2px 6px; border-radius:4px; font-size:0.8em;">⏱ ${doc.lectura_str}</span>` : ''}
             </div>
             
-            <p style="font-size: 0.95em; color: #4d5156; line-height: 1.5;">
-                ... ${doc.snippet || ''} ...
+            <p style="
+                color: #444; 
+                font-size: 0.95em; 
+                margin-top: 8px;
+                line-height: 1.5;
+                
+                /* ESTO CORTA EL TEXTO VISUALMENTE A 2 LÍNEAS */
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            ">
+                ${doc.snippet || 'No se encontró fragmento relevante.'}
             </p>
         `;
         
         resultsDiv.appendChild(item);
     });
+    // ... resto de la función renderizar
 }
+
 
 function renderizarFiltros(facets) {
     const contenedor = document.getElementById('facets-content'); 
