@@ -1,9 +1,7 @@
 <?php
-// search.php - VERSIÓN FINAL CORREGIDA
-// Ocultamos advertencias (Deprecated) para que no ensucien el JSON
-error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE);
-ini_set('display_errors', 0);
-
+// search.php - VERSIÓN DE DIAGNÓSTICO
+error_reporting(E_ALL); // Reportar todos los errores
+ini_set('display_errors', 0); // Pero no imprimirlos en el HTML para no romper el JSON
 require __DIR__ . '/../vendor/autoload.php';
 require __DIR__ . '/../config/config_query_expansion.php';
 header('Content-Type: application/json');
@@ -12,38 +10,41 @@ use Solarium\Client;
 use Solarium\Core\Client\Adapter\Curl;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 
+// --- VARIABLE GLOBAL PARA GUARDAR ERRORES DE GEMINI ---
+$geminiDebug = ["status" => "No se intentó conectar"];
+
 // ==========================================
-// 1. FUNCIÓN DE EXPANSIÓN SEMÁNTICA (GEMINI)
+// 1. FUNCIÓN GEMINI CON DIAGNÓSTICO
 // ==========================================
 function obtenerSinonimosGemini($termino) {
+    global $geminiDebug;
+    
     
     // -----------------------------------------------------------
-    // 🔑 PEGA TU API KEY AQUÍ ABAJO (Dentro de las comillas)
-    // -----------------------------------------------------------
-    $apiKey = 'AIzaSyB8yv4yT17DNe1FAHf9t2xlYuncsELR1vA'; 
+    $apiKey = 'AIzaSyD1FdqwD_KhGzaJUNbwbH-pim65_0l7hl0'; 
     // -----------------------------------------------------------
 
-    // Validación simple
-    if ($apiKey === 'TU_API_KEY_DE_GOOGLE' || strlen($termino) < 3) {
+    if ($apiKey === 'TU_API_KEY_DE_GOOGLE') {
+        $geminiDebug = ["error" => "FALTA LA API KEY. Reemplaza el texto en el código."];
         return [];
     }
 
-    // USAREMOS EL MODELO QUE SÍ TIENES: gemini-2.0-flash
-    $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" . $apiKey;
+   // Cambiamos 'v1beta' por 'v1' y usamos el modelo clásico
+$url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" . $apiKey;
     
-    // Instrucción precisa para obligar a Gemini a pensar en español
-    // Prompt con contexto de TECNOLOGÍA para evitar confusiones
-    $prompt = "Contexto: Eres el motor de expansión semántica de una Enciclopedia de TECNOLOGÍA e INFORMÁTICA en español. " .
-              "Tu tarea es generar sinónimos técnicos para mejorar la búsqueda. " .
-              "REGLAS OBLIGATORIAS: " .
-              "1. Idioma: Todo debe ser en ESPAÑOL. " .
-              "2. Desambiguación: Si una palabra es un 'falso amigo' (como 'red'), asume SIEMPRE el significado informático (ej: 'red' = 'conexión/network', NUNCA 'color rojo'). " .
-              "3. Devuelve SOLAMENTE un array JSON crudo con 3 sinónimos para: '$termino'.";
-    // Configuración mínima para evitar errores 400
+    $prompt = "Eres un buscador experto. Devuelve SOLAMENTE un array JSON crudo con 3 sinónimos para: '$termino'. Ejemplo: [\"sinonimo1\", \"sinonimo2\"]";
+
+
+  // CONFIGURACIÓN SIMPLE (A prueba de fallos)
     $data = [
         'contents' => [
-            [ 'parts' => [ ['text' => $prompt] ] ]
+            [
+                'parts' => [
+                    ['text' => $prompt]
+                ]
+            ]
         ]
+        // Eliminamos 'generationConfig' por completo para evitar errores
     ];
 
     $ch = curl_init($url);
@@ -52,30 +53,44 @@ function obtenerSinonimosGemini($termino) {
     curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     
-    // FIX SSL PARA LOCALHOST (Mac/XAMPP)
+    // --- FIX PARA MAC/LOCALHOST (SSL) ---
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 4); // 4 segundos máximo
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5); // 5 segundos de espera máximo
 
     $response = curl_exec($ch);
-    
-    // En PHP 8.x curl_close ya no es obligatorio y da warning, lo quitamos o ignoramos.
-    // curl_close($ch); 
+    $curlError = curl_error($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
 
+
+    // GUARDAR DIAGNÓSTICO
+    if ($curlError) {
+        $geminiDebug = ["error_conexion" => $curlError];
+        return [];
+    }
+    
+    $geminiDebug = [
+        "status" => "Conectado",
+        "codigo_http" => $httpCode,
+        "respuesta_raw" => substr($response, 0, 200) . "..." // Mostramos los primeros 200 caracteres
+    ];
+
+    // Procesar JSON
     if ($response) {
         $json = json_decode($response, true);
-        
-        // Buscamos el texto en la estructura de Gemini
         if (isset($json['candidates'][0]['content']['parts'][0]['text'])) {
             $rawText = $json['candidates'][0]['content']['parts'][0]['text'];
-            
-            // Limpiamos marcas de Markdown (```json ... ```)
             $rawText = str_replace(['```json', '```'], '', $rawText);
             $sinonimos = json_decode($rawText, true);
 
             if (is_array($sinonimos)) {
                 return $sinonimos;
+            } else {
+                $geminiDebug["error_parsing"] = "Google respondió, pero no era un array JSON válido.";
             }
+        } else {
+            $geminiDebug["error_api"] = "La estructura del JSON de Google no es la esperada (Posible error de cuota o modelo).";
         }
     }
 
@@ -83,8 +98,9 @@ function obtenerSinonimosGemini($termino) {
 }
 
 // ==========================================
-// 2. CONFIGURACIÓN SOLR
+// 2. LÓGICA DE SOLR
 // ==========================================
+
 $config = [
     'endpoint' => [
         'localhost' => [
@@ -96,67 +112,37 @@ $config = [
     ]
 ];
 $client = new Client(new Curl(), new EventDispatcher(), $config);
-
-// 3. PROCESAR CONSULTA
 $queryTerm = $_GET['q'] ?? '*:*';
 $query = $client->createSelect();
 $dismax = $query->getEDisMax();
-// Ajusta estos pesos según lo que prefieras
-$dismax->setQueryFields('titulo^3.0 contenido^1.0 categoria^0.5'); 
+$dismax->setQueryFields('titulo^2.0 contenido^1.0');
 
-// 4. PREPARACIÓN BOOLEANA
+// Lógica Booleana
 $terminoOriginal = $queryTerm;
 $reemplazos = [' and ' => ' AND ', ' or ' => ' OR ', ' not ' => ' NOT '];
 $queryFinal = str_ireplace(array_keys($reemplazos), array_values($reemplazos), $terminoOriginal);
 
-// 5. APLICAR EXPANSIÓN SEMÁNTICA
-// Solo si es una búsqueda simple (sin operadores complejos)
-if (strpos($queryFinal, ' AND ') === false && strpos($queryFinal, ' OR ') === false && $queryFinal !== '*:*') {
+// --- EXPANSIÓN SEMÁNTICA ---
+// Solo si no es una búsqueda compleja
+if (strpos($queryFinal, ' AND ') === false && strpos($queryFinal, ' OR ') === false) {
+    // LLAMAMOS A LA FUNCIÓN (Sin caché por ahora, para probar conexión)
+    $sinonimos = obtenerSinonimosGemini($queryFinal);
     
-    // CACHÉ SIMPLE EN ARCHIVO (Para no gastar API ni tiempo)
-    $archivoCache = __DIR__ . '/cache_sinonimos_v2.json';
-    $terminoLower = mb_strtolower(trim($queryFinal));
-    $sinonimos = [];
-
-    // A) Intentar leer de caché
-    if (file_exists($archivoCache)) {
-        $cacheData = json_decode(file_get_contents($archivoCache), true) ?? [];
-        if (isset($cacheData[$terminoLower])) {
-            $sinonimos = $cacheData[$terminoLower];
-        }
-    }
-
-    // B) Si no hay caché, preguntar a Gemini
-    if (empty($sinonimos)) {
-        $sinonimos = obtenerSinonimosGemini($queryFinal);
-        
-        // Guardar en caché si hubo éxito
-        if (!empty($sinonimos)) {
-            $cacheData = file_exists($archivoCache) ? json_decode(file_get_contents($archivoCache), true) : [];
-            $cacheData[$terminoLower] = $sinonimos;
-            file_put_contents($archivoCache, json_encode($cacheData));
-        }
-    }
-    
-    // C) Modificar la query
     if (!empty($sinonimos)) {
-        // Ponemos comillas a cada sinónimo
         $sinonimosQuotes = array_map(function($s) { return '"' . trim($s) . '"'; }, $sinonimos);
         $expansion = implode(' OR ', $sinonimosQuotes);
-        // Query final: (original OR sinonimo1 OR sinonimo2)
         $queryFinal = "($queryFinal OR $expansion)";
     }
 }
 
 $query->setQuery($queryFinal);
 
-// 6. FACETAS (FILTROS LATERALES)
+// Facetas y Filtros
 $facetSet = $query->getFacetSet();
 $facetSet->createFacetField('categorias')->setField('categoria_str');
 $facetSet->createFacetField('niveles_lectura')->setField('lectura_str');
 $facetSet->createFacetField('anios')->setField('anio_str')->setSort('index');
 
-// 7. APLICAR FILTROS DE URL
 $mapaFiltros = ['cat' => 'categoria_str', 'lectura' => 'lectura_str', 'anio' => 'anio_str'];
 foreach ($mapaFiltros as $paramUrl => $campoSolr) {
     if ($val = $_GET[$paramUrl] ?? null) {
@@ -164,39 +150,31 @@ foreach ($mapaFiltros as $paramUrl => $campoSolr) {
     }
 }
 
-// 8. EXTRAS (Snippets, Corrector)
+// Highlighting & Spellcheck
 $query->getHighlighting()->setFields('contenido')->setSimplePrefix('<b>')->setSimplePostfix('</b>');
 $query->getSpellcheck()->setQuery($queryTerm)->setCount(1);
 
-// 9. EJECUTAR EN SOLR
+// Ejecutar
 try {
     $resultset = $client->select($query);
 } catch (Exception $e) {
-    echo json_encode(['error' => $e->getMessage()]);
+    echo json_encode(['error' => $e->getMessage(), 'gemini_debug' => $geminiDebug]);
     exit;
 }
 
-// 10. PREPARAR RESPUESTA JSON
+// Preparar respuesta
 $docs = [];
-$hl = $resultset->getHighlighting();
-
 foreach ($resultset as $doc) {
-    // Snippet
-    $snip = $hl->getResult($doc->id)->getField('contenido');
-    $snippetText = count($snip) > 0 ? implode(' ... ', $snip) : substr($doc->contenido[0] ?? '', 0, 100);
-
     $docs[] = [
         'titulo' => $doc->titulo,
         'url' => $doc->url,
         'categoria' => $doc->categoria,
         'anio_str' => $doc->anio_str ?? null,
         'lectura_str' => $doc->lectura_str ?? null,
-        'snippet' => $snippetText,
         'score' => $doc->score
     ];
 }
 
-// Facetas
 $allFacets = $resultset->getFacetSet()->getFacets();
 $facetData = [];
 foreach ($allFacets as $name => $res) {
@@ -208,17 +186,20 @@ foreach ($allFacets as $name => $res) {
     }
 }
 
-// Sugerencia
 $suggestion = null;
 if ($spell = $resultset->getSpellcheck()) {
     foreach ($spell->getCollations() as $c) { $suggestion = $c->getQuery(); break; }
 }
 
+// --- RESPUESTA FINAL CON DIAGNÓSTICO ---
 echo json_encode([
     'results' => $docs,
     'facets' => $facetData,
     'suggestion' => $suggestion,
     'total' => $resultset->getNumFound(),
-    'debug_query' => $queryFinal // Para que veas la magia en la consola
+    
+    // AQUÍ ESTÁ EL CHIVATO
+    'debug_query' => $queryFinal,
+    'gemini_status' => $geminiDebug 
 ]);
 ?>
