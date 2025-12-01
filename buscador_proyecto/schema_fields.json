@@ -13,9 +13,9 @@
       "indexed": true
     },
     {
-      "name": "categoria",
+      "name": "categoria_str",
       "type": "string",
-      "stored": true,
+      "stored": false,
       "indexed": true,
       "multiValued": false
     },
@@ -24,6 +24,19 @@
       "type": "string",
       "stored": true,
       "indexed": true
-    }
+    },{
+  "name": "anio_str",
+  "type": "string",
+  "stored": true,
+  "indexed": true
+},
+{
+  "name": "lectura_str",
+  "type": "string",
+  "stored": true,
+  "indexed": true
+}
+    
+    
   ]
 }

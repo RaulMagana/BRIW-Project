@@ -104,17 +104,24 @@ class SolrDeepCrawler
             $update = $this->solr->createUpdate();
             $doc = $update->createDocument();
 
+            // 1. TÍTULO
             $titulo = 'Sin titulo';
             if ($crawler->filter('h1')->count() > 0) $titulo = $crawler->filter('h1')->text();
             elseif ($crawler->filter('title')->count() > 0) $titulo = $crawler->filter('title')->text();
 
+            // 2. CONTENIDO (Protegido contra nulos)
             $contenidoHtml = '';
             $selector = $crawler->filter('#bodyContent p')->count() > 0 ? '#bodyContent p' : 'body p';
+            
             $crawler->filter($selector)->each(function (Crawler $node) use (&$contenidoHtml) {
-                $contenidoHtml .= $node->html() . ' ';
+                $contenidoHtml .= ($node->html() ?? '') . ' ';
             });
-            if (strlen($contenidoHtml) < 50) $contenidoHtml = $crawler->filter('body')->html();
 
+            if (strlen($contenidoHtml) < 50) {
+                $contenidoHtml = $crawler->filter('body')->html() ?? '';
+            }
+
+            // 3. LIMPIEZA
             $tokens = Preprocessor::process($contenidoHtml);
             $contenidoLimpio = implode(' ', $tokens);
 
@@ -125,19 +132,64 @@ class SolrDeepCrawler
 
             $contenidoSeguro = mb_substr($contenidoLimpio, 0, 30000, "UTF-8");
 
+            // =========================================================
+            // LÓGICA DE AUTOMATIZACIÓN (El cambio importante)
+            // =========================================================
+
+            // A. CATEGORÍA AUTOMÁTICA (Desde Wikipedia)
+            $categoriaDetectada = 'General'; // Valor por defecto
+
+            // Buscamos el bloque de categorías al final de la página de Wikipedia
+            if ($crawler->filter('#mw-normal-catlinks li a')->count() > 0) {
+                // Obtenemos todas las categorías
+                $cats = $crawler->filter('#mw-normal-catlinks li a')->each(function ($node) {
+                    return $node->text();
+                });
+
+                // Buscamos la primera que sea útil (que no diga "Wikipedia" o "Anexo")
+                foreach ($cats as $cat) {
+                    if (stripos($cat, 'Wikipedia') === false && stripos($cat, 'Anexo') === false && stripos($cat, 'Artículos') === false) {
+                        $categoriaDetectada = $cat; // ¡La encontramos!
+                        break; 
+                    }
+                }
+            }
+
+            // B. NIVEL DE LECTURA (Cálculo matemático)
+            $numPalabras = str_word_count($contenidoSeguro);
+            $nivelLectura = 'Estándar';
+            if ($numPalabras < 500) $nivelLectura = 'Breve';
+            elseif ($numPalabras > 3000) $nivelLectura = 'Detallado';
+
+            // C. AÑO (Detección en texto)
+            $anioDetectado = date('Y'); 
+            if (preg_match('/\b(19|20)\d{2}\b/', $contenidoSeguro, $matches)) {
+                $anioDetectado = $matches[0];
+            }
+
+            // =========================================================
+            // ASIGNACIÓN A SOLR
+            // =========================================================
+            
             $doc->id = md5($url);
             $doc->titulo    = $titulo;          
             $doc->contenido = $contenidoSeguro; 
             $doc->url       = $url;             
             
-            $esTecnologia = (stripos($contenidoSeguro, 'tecnologia') !== false || stripos($contenidoSeguro, 'web') !== false || stripos($contenidoSeguro, 'computadora') !== false);
-            $doc->categoria = $esTecnologia ? 'Tecnología' : 'General';
+            // Campos para mostrar
+            $doc->categoria = $categoriaDetectada;
 
+            // Campos para filtros (Facetas)
+            $doc->categoria_str = $categoriaDetectada; 
+            $doc->lectura_str   = $nivelLectura;
+            $doc->anio_str      = $anioDetectado;
+
+            // Enviar
             $update->addDocument($doc);
             $update->addCommit();
             $this->solr->update($update);
 
-            echo "    -> [SOLR] OK: " . substr($titulo, 0, 30) . "\n";
+            echo "    -> [SOLR] OK: " . substr($titulo, 0, 20) . "... | Cat: $categoriaDetectada | $anioDetectado\n";
 
         } catch (Exception $e) {
             echo "    -> [ERROR SOLR] " . $e->getMessage() . "\n";
