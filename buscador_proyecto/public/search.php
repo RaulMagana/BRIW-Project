@@ -11,12 +11,7 @@ use Solarium\Client;
 use Solarium\Core\Client\Adapter\Curl;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 
-// ==========================================
-// 1. FUNCIÓN GEMINI (CONEXIÓN Y LÓGICA)
-// ==========================================
-// ==========================================
-// FUNCIÓN GEMINI (FINAL Y MINIMALISTA)
-// ==========================================
+
 function obtenerSinonimosGemini($termino) {
     global $geminiDebug;
     
@@ -29,12 +24,11 @@ function obtenerSinonimosGemini($termino) {
         return [];
     }
 
-    // Usamos el modelo 2.0 que tienes acceso
+ 
     $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" . $apiKey;
     
     $prompt = "Contexto: Buscador de Tecnología. Genera un array JSON con 3 sinónimos técnicos en español para: '$termino'. IGNORA otros idiomas. Ejemplo: [\"sinonimo1\"]";
 
-    // CARGA DE DATOS: (Estructura más simple para evitar el 400)
     $data = ['contents' => [[ 'parts' => [ ['text' => $prompt] ] ]]];
 
     $ch = curl_init($url);
@@ -62,13 +56,13 @@ function obtenerSinonimosGemini($termino) {
     if ($response) {
         $json = json_decode($response, true);
         
-        // Verificación de error de Google
+       
         if (isset($json['error'])) {
              $geminiDebug = ["error_fatal" => $json['error']['message']];
              return [];
         }
 
-        // Procesamiento exitoso
+      
         if (isset($json['candidates'][0]['content']['parts'][0]['text'])) {
             $rawText = $json['candidates'][0]['content']['parts'][0]['text'];
             $rawText = str_replace(['```json', '```'], '', $rawText);
@@ -96,10 +90,10 @@ $query = $client->createSelect();
 $dismax = $query->getEDisMax();
 $dismax->setQueryFields('titulo^2.0 contenido^1.0');
 
-// Lógica Booleana y Expansión (Se omite cache para simplicidad de debug)
+
 $queryFinal = $queryTerm;
 
-// Chequeo de API Key y llamada a Gemini
+
 if (strpos($queryTerm, ' AND ') === false && strpos($queryTerm, ' OR ') === false) {
     $sinonimos = obtenerSinonimosGemini($queryTerm);
     
