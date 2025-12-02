@@ -6,14 +6,12 @@
 const FACET_TITLES = {
     'categorias': 'Categoría',
     'niveles_lectura': 'Extensión del documento',
-    'anios': 'Año de Publicación'
 };
 
 // Diccionario para mapear nombres de Solr a parámetros URL (search.php)
 const URL_PARAM_MAP = {
     'categorias': 'cat',
     'niveles_lectura': 'lectura',
-    'anios': 'anio'
 };
 
 // ==========================================
@@ -159,36 +157,28 @@ function renderizarResultados(data) {
         item.style.borderRadius = "8px";
         item.style.backgroundColor = "#fff";
         
-        // Badge de relevancia (Tu lógica original)
-        let badge = '';
-        const queryClean = document.getElementById('query').value.trim().toLowerCase();
-        const tituloClean = (Array.isArray(doc.titulo) ? doc.titulo.join(" ") : doc.titulo || "").toLowerCase();
-        
-        if (queryClean.length > 2 && tituloClean.includes(queryClean)) {
-            badge = `<span style="background: #ffd700; color: #000; padding: 2px 6px; font-size: 0.7em; border-radius: 4px; margin-left: 10px; border: 1px solid #d4af37;">★ Relevante</span>`;
-        }
-
-        // --- NUEVO: Badges para Año y Lectura ---
-        let infoExtra = '';
-        if (doc.anio_str) infoExtra += `<span style="background:#eee; padding:2px 6px; border-radius:4px; font-size:0.8em; margin-right:5px;">📅 ${doc.anio_str}</span>`;
-        if (doc.lectura_str) infoExtra += `<span style="background:#e3f2fd; color:#0d47a1; padding:2px 6px; border-radius:4px; font-size:0.8em;">⏱ ${doc.lectura_str}</span>`;
+        // Validamos que exista URL, si no ponemos '#'
+        const linkUrl = doc.url || '#';
 
         // HTML del Item
        item.innerHTML = `
             <div style="display:flex; justify-content:space-between;">
                 <h3 style="margin:0 0 5px 0;">
-                    <a href="${doc.url || '#'}" target="_blank" style="text-decoration:none; color:#1a0dab; font-size:1.2rem;">${doc.titulo}</a>
+                    <a href="${linkUrl}" target="_blank" style="text-decoration:none; color:#1a0dab; font-size:1.2rem;">
+                        ${doc.titulo}
+                    </a>
                 </h3>
                 <span style="font-size:0.8em; color:#777;">Score: ${parseFloat(doc.score).toFixed(2)}</span>
             </div>
 
-            <div style="font-size:0.85em; color:#006621; margin-bottom:5px;">
-                ${doc.url || ''}
+            <div style="margin-bottom:5px;">
+                <a href="${linkUrl}" target="_blank" style="font-size:0.85em; color:#006621; text-decoration:none;">
+                    ${doc.url || ''}
+                </a>
             </div>
 
             <div style="margin-bottom:8px;">
                 <span style="background:#f1f3f4; padding:2px 6px; border-radius:4px; font-size:0.8em; border:1px solid #dadce0;">${doc.categoria || 'General'}</span>
-                ${doc.anio_str ? `<span style="background:#eee; padding:2px 6px; border-radius:4px; font-size:0.8em; margin-right:5px;">📅 ${doc.anio_str}</span>` : ''}
                 ${doc.lectura_str ? `<span style="background:#e3f2fd; color:#0d47a1; padding:2px 6px; border-radius:4px; font-size:0.8em;">⏱ ${doc.lectura_str}</span>` : ''}
             </div>
             
@@ -197,8 +187,6 @@ function renderizarResultados(data) {
                 font-size: 0.95em; 
                 margin-top: 8px;
                 line-height: 1.5;
-                
-                /* ESTO CORTA EL TEXTO VISUALMENTE A 2 LÍNEAS */
                 display: -webkit-box;
                 -webkit-line-clamp: 2;
                 -webkit-box-orient: vertical;
@@ -211,7 +199,6 @@ function renderizarResultados(data) {
         
         resultsDiv.appendChild(item);
     });
-    // ... resto de la función renderizar
 }
 
 
