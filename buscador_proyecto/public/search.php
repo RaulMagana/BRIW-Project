@@ -119,4 +119,3 @@ echo json_encode([
     'suggestion' => $suggestion,
     'total' => $resultset->getNumFound()
 ]);
-

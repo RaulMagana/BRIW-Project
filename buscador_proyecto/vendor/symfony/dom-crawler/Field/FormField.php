@@ -18,6 +18,7 @@ namespace Symfony\Component\DomCrawler\Field;
  */
 abstract class FormField
 {
+    protected \DOMElement $node;
     protected string $name;
     protected string|array|null $value = null;
     protected \DOMDocument $document;
@@ -27,9 +28,9 @@ abstract class FormField
     /**
      * @param \DOMElement $node The node associated with this field
      */
-    public function __construct(
-        protected \DOMElement $node,
-    ) {
+    public function __construct(\DOMElement $node)
+    {
+        $this->node = $node;
         $this->name = $node->getAttribute('name');
         $this->xpath = new \DOMXPath($node->ownerDocument);
 
@@ -44,7 +45,7 @@ abstract class FormField
         $xpath = new \DOMXPath($this->node->ownerDocument);
 
         if ($this->node->hasAttribute('id')) {
-            $labels = $xpath->query(\sprintf('descendant::label[@for="%s"]', $this->node->getAttribute('id')));
+            $labels = $xpath->query(sprintf('descendant::label[@for="%s"]', $this->node->getAttribute('id')));
             if ($labels->length > 0) {
                 return $labels->item(0);
             }
